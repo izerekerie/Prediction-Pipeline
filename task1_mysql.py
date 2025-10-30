@@ -95,9 +95,13 @@ create_table_statements = [
 ]
 
 # Stored procedures to create (use TEXT / LONGTEXT instead of JSON types)
+# ...existing code...
 sp_statements = [
     "DROP PROCEDURE IF EXISTS sp_log_change;",
     "DROP PROCEDURE IF EXISTS sp_insert_patient;",
+    "DROP PROCEDURE IF EXISTS sp_check_staff_availability;",
+    "DROP PROCEDURE IF EXISTS sp_calculate_service_metrics;",
+
     """
     CREATE PROCEDURE sp_log_change(
         IN p_table_name VARCHAR(128),
@@ -112,6 +116,7 @@ sp_statements = [
         VALUES (p_table_name, p_row_pk, p_operation, p_old, p_new, p_user);
     END;
     """,
+
     """
     CREATE PROCEDURE sp_insert_patient(
         IN p_patient_id VARCHAR(64),
@@ -175,9 +180,48 @@ sp_statements = [
             SELECT 'inserted' AS status;
         END IF;
     END;
-    """
-]
+    """,
 
+    """
+    CREATE PROCEDURE sp_check_staff_availability(
+        IN p_service VARCHAR(64),
+        IN p_shift VARCHAR(64)
+    )
+    BEGIN
+        -- returns number of staff on shift for given service and shift/day
+        SELECT COUNT(*) AS available_count
+        FROM staff_schedule
+        WHERE service = p_service
+          AND day_or_shift = p_shift
+          AND on_shift = 1;
+    END;
+    """,
+
+    """
+    CREATE PROCEDURE sp_calculate_service_metrics(
+        IN p_service VARCHAR(64),
+        IN p_week INT,
+        IN p_month INT
+    )
+    BEGIN
+        -- returns the metrics row for the requested service/week/month if present
+        SELECT
+            available_beds,
+            patients_request,
+            patients_admitted,
+            patients_refused,
+            patient_satisfaction,
+            staff_morale
+        FROM services_weekly
+        WHERE service = p_service
+          AND `week` = p_week
+          AND `month` = p_month
+        LIMIT 1;
+    END;
+    """,
+
+]
+# ...existing code...
 
 def run():
     try:
