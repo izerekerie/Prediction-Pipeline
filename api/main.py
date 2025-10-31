@@ -175,3 +175,111 @@ class ServiceWeeklyPatch(BaseModel):
 	staff_morale: Optional[int] = Field(default=None, ge=0, le=100)
 	event: Optional[str] = Field(default=None, max_length=255)
 
+
+# ======== Patients CRUD ========
+@app.post("/patients", response_model=dict, status_code=status.HTTP_201_CREATED, tags=["Patients"])
+def create_patient(payload: PatientIn, conn=Depends(db_conn)):
+	# Auto-generate patient_id
+	patient_id = generate_patient_id()
+	
+	# Create a copy of the payload with the generated ID
+	patient_data = payload.model_dump()
+	patient_data["patient_id"] = patient_id
+	
+	result = call_sp_insert_patient(conn, patient_data, changed_by="api")
+	if result.get("status") == "validation_failed":
+		raise HTTPException(status_code=400, detail=result.get("error_message"))
+	return {"status": "created", "patient_id": patient_id}
+
+
+@app.get("/patients", response_model=list[PatientOut], tags=["Patients"])
+def list_patients(conn=Depends(db_conn)):
+	rows = query_all(conn, "SELECT * FROM patients ORDER BY patient_id", ())
+	return rows
+
+
+@app.get("/patients/{patient_id}", response_model=PatientOut, tags=["Patients"])
+def get_patient(patient_id: str, conn=Depends(db_conn)):
+	row = query_one(conn, "SELECT * FROM patients WHERE patient_id=%s", (patient_id,))
+	if not row:
+		raise HTTPException(status_code=404, detail="Patient not found")
+	return row
+
+
+@app.put("/patients/{patient_id}", response_model=dict, tags=["Patients"])
+def update_patient(patient_id: str, payload: PatientIn, conn=Depends(db_conn)):
+	# patient_id is only in the path, not in the body
+
+	row = query_one(conn, "SELECT * FROM patients WHERE patient_id=%s", (patient_id,))
+	if not row:
+		raise HTTPException(status_code=404, detail="Patient not found")
+
+	count = execute(
+		conn,
+		"""
+		UPDATE patients SET name=%s, age=%s, arrival_date=%s, departure_date=%s,
+		       service=%s, satisfaction=%s
+		WHERE patient_id=%s
+		""",
+		(
+			payload.name,
+			payload.age,
+			payload.arrival_date,
+			payload.departure_date,
+			payload.service,
+			payload.satisfaction,
+			patient_id,
+		),
+	)
+	return {"updated": count}
+
+
+@app.patch("/patients/{patient_id}", response_model=dict, tags=["Patients"])
+def patch_patient(patient_id: str, payload: PatientPatch, conn=Depends(db_conn)):
+	# Check if patient exists
+	row = query_one(conn, "SELECT * FROM patients WHERE patient_id=%s", (patient_id,))
+	if not row:
+		raise HTTPException(status_code=404, detail="Patient not found")
+	
+	# Build dynamic UPDATE query with only provided fields
+	updates = []
+	params = []
+	
+	payload_dict = payload.model_dump(exclude_unset=True)  # Only get fields that were explicitly set
+	
+	if "name" in payload_dict and payload_dict["name"] is not None:
+		updates.append("name=%s")
+		params.append(payload_dict["name"])
+	if "age" in payload_dict:
+		updates.append("age=%s")
+		params.append(payload_dict["age"])
+	if "arrival_date" in payload_dict:
+		updates.append("arrival_date=%s")
+		params.append(payload_dict["arrival_date"])
+	if "departure_date" in payload_dict:
+		updates.append("departure_date=%s")
+		params.append(payload_dict["departure_date"])
+	if "service" in payload_dict:
+		updates.append("service=%s")
+		params.append(payload_dict["service"])
+	if "satisfaction" in payload_dict:
+		updates.append("satisfaction=%s")
+		params.append(payload_dict["satisfaction"])
+	
+	if not updates:
+		raise HTTPException(status_code=400, detail="No fields to update")
+	
+	params.append(patient_id)
+	sql = f"UPDATE patients SET {', '.join(updates)} WHERE patient_id=%s"
+	count = execute(conn, sql, tuple(params))
+	return {"updated": count}
+
+
+@app.delete("/patients/{patient_id}", response_model=dict, status_code=status.HTTP_200_OK, tags=["Patients"])
+def delete_patient(patient_id: str, conn=Depends(db_conn)):
+	row = query_one(conn, "SELECT * FROM patients WHERE patient_id=%s", (patient_id,))
+	if not row:
+		raise HTTPException(status_code=404, detail="Patient not found")
+	count = execute(conn, "DELETE FROM patients WHERE patient_id=%s", (patient_id,))
+	return {"deleted": count}
+
