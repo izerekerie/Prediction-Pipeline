@@ -283,3 +283,203 @@ def delete_patient(patient_id: str, conn=Depends(db_conn)):
 	count = execute(conn, "DELETE FROM patients WHERE patient_id=%s", (patient_id,))
 	return {"deleted": count}
 
+
+# ======== Staff CRUD ========
+@app.post("/staff", response_model=StaffOut, status_code=status.HTTP_201_CREATED, tags=["Staff"])
+def create_staff(payload: StaffIn, conn=Depends(db_conn)):
+	# Auto-generate staff_id
+	staff_id = generate_staff_id()
+	
+	# Convert enum to string value (or None)
+	role_value = payload.role.value if payload.role else None
+	service_value = payload.service.value if payload.service else None
+	
+	execute(
+		conn,
+		"INSERT INTO staff (staff_id, staff_name, role, service) VALUES (%s,%s,%s,%s)",
+		(staff_id, payload.staff_name, role_value, service_value),
+	)
+	
+	# Fetch the inserted record
+	row = query_one(conn, "SELECT * FROM staff WHERE staff_id=%s", (staff_id,))
+	if not row:
+		raise HTTPException(status_code=500, detail="Failed to retrieve created staff record")
+	
+	# Ensure we return proper values (handle None -> empty string conversion)
+	if row.get("role") is None:
+		row["role"] = role_value or ""
+	if row.get("service") is None:
+		row["service"] = service_value or ""
+	
+	return row  # type: ignore
+
+
+@app.get("/staff", response_model=list[StaffOut], tags=["Staff"])
+def list_staff(conn=Depends(db_conn)):
+	return query_all(conn, "SELECT * FROM staff ORDER BY staff_id", ())
+
+
+@app.get("/staff/{staff_id}", response_model=StaffOut, tags=["Staff"])
+def get_staff(staff_id: str, conn=Depends(db_conn)):
+	row = query_one(conn, "SELECT * FROM staff WHERE staff_id=%s", (staff_id,))
+	if not row:
+		raise HTTPException(status_code=404, detail="Staff not found")
+	return row  # type: ignore
+
+
+@app.put("/staff/{staff_id}", response_model=dict, tags=["Staff"])
+def update_staff(staff_id: str, payload: StaffIn, conn=Depends(db_conn)):
+	# staff_id is only in the path, not in the body
+	# Convert enum to string value (or None)
+	role_value = payload.role.value if payload.role else None
+	service_value = payload.service.value if payload.service else None
+	
+	count = execute(
+		conn,
+		"UPDATE staff SET staff_name=%s, role=%s, service=%s WHERE staff_id=%s",
+		(payload.staff_name, role_value, service_value, staff_id),
+	)
+	return {"updated": count}
+
+
+@app.patch("/staff/{staff_id}", response_model=dict, tags=["Staff"])
+def patch_staff(staff_id: str, payload: StaffPatch, conn=Depends(db_conn)):
+	# Check if staff exists
+	row = query_one(conn, "SELECT * FROM staff WHERE staff_id=%s", (staff_id,))
+	if not row:
+		raise HTTPException(status_code=404, detail="Staff not found")
+	
+	# Build dynamic UPDATE query with only provided fields
+	updates = []
+	params = []
+	
+	payload_dict = payload.model_dump(exclude_unset=True)  # Only get fields that were explicitly set
+	
+	if "staff_name" in payload_dict and payload_dict["staff_name"] is not None:
+		updates.append("staff_name=%s")
+		params.append(payload_dict["staff_name"])
+	if "role" in payload_dict and payload_dict["role"] is not None:
+		updates.append("role=%s")
+		params.append(payload_dict["role"].value)  # Convert enum to value
+	if "service" in payload_dict and payload_dict["service"] is not None:
+		updates.append("service=%s")
+		params.append(payload_dict["service"].value)  # Convert enum to value
+	
+	if not updates:
+		raise HTTPException(status_code=400, detail="No fields to update")
+	
+	params.append(staff_id)
+	sql = f"UPDATE staff SET {', '.join(updates)} WHERE staff_id=%s"
+	count = execute(conn, sql, tuple(params))
+	return {"updated": count}
+
+
+@app.delete("/staff/{staff_id}", response_model=dict, tags=["Staff"])
+def delete_staff(staff_id: str, conn=Depends(db_conn)):
+	count = execute(conn, "DELETE FROM staff WHERE staff_id=%s", (staff_id,))
+	return {"deleted": count}
+
+
+# ======== Staff Schedule CRUD ========
+@app.post("/staff-schedule", response_model=StaffScheduleOut, status_code=status.HTTP_201_CREATED, tags=["Staff Schedule"])
+def create_staff_schedule(payload: StaffScheduleIn, conn=Depends(db_conn)):
+	execute(
+		conn,
+		"""
+		INSERT INTO staff_schedule (day_or_shift, staff_id, staff_name, role, service, on_shift)
+		VALUES (%s,%s,%s,%s,%s,%s)
+		""",
+		(
+			payload.day_or_shift,
+			payload.staff_id,
+			payload.staff_name,
+			payload.role,
+			payload.service,
+			1 if payload.on_shift else 0,
+		),
+	)
+	row = query_one(conn, "SELECT * FROM staff_schedule ORDER BY id DESC LIMIT 1", ())
+	return row  # type: ignore
+
+
+@app.get("/staff-schedule", response_model=list[StaffScheduleOut], tags=["Staff Schedule"])
+def list_staff_schedule(conn=Depends(db_conn)):
+	return query_all(conn, "SELECT * FROM staff_schedule ORDER BY id DESC", ())
+
+
+@app.get("/staff-schedule/{id}", response_model=StaffScheduleOut, tags=["Staff Schedule"])
+def get_staff_schedule(id: int, conn=Depends(db_conn)):
+	row = query_one(conn, "SELECT * FROM staff_schedule WHERE id=%s", (id,))
+	if not row:
+		raise HTTPException(status_code=404, detail="Schedule not found")
+	return row  # type: ignore
+
+
+@app.put("/staff-schedule/{id}", response_model=dict, tags=["Staff Schedule"])
+def update_staff_schedule(id: int, payload: StaffScheduleIn, conn=Depends(db_conn)):
+	count = execute(
+		conn,
+		"""
+		UPDATE staff_schedule
+		SET day_or_shift=%s, staff_id=%s, staff_name=%s, role=%s, service=%s, on_shift=%s
+		WHERE id=%s
+		""",
+		(
+			payload.day_or_shift,
+			payload.staff_id,
+			payload.staff_name,
+			payload.role,
+			payload.service,
+			1 if payload.on_shift else 0,
+			id,
+		),
+	)
+	return {"updated": count}
+
+
+@app.patch("/staff-schedule/{id}", response_model=dict, tags=["Staff Schedule"])
+def patch_staff_schedule(id: int, payload: StaffSchedulePatch, conn=Depends(db_conn)):
+	# Check if schedule exists
+	row = query_one(conn, "SELECT * FROM staff_schedule WHERE id=%s", (id,))
+	if not row:
+		raise HTTPException(status_code=404, detail="Schedule not found")
+	
+	# Build dynamic UPDATE query with only provided fields
+	updates = []
+	params = []
+	
+	payload_dict = payload.model_dump(exclude_unset=True)  # Only get fields that were explicitly set
+	
+	if "day_or_shift" in payload_dict and payload_dict["day_or_shift"] is not None:
+		updates.append("day_or_shift=%s")
+		params.append(payload_dict["day_or_shift"])
+	if "staff_id" in payload_dict:
+		updates.append("staff_id=%s")
+		params.append(payload_dict["staff_id"])
+	if "staff_name" in payload_dict:
+		updates.append("staff_name=%s")
+		params.append(payload_dict["staff_name"])
+	if "role" in payload_dict:
+		updates.append("role=%s")
+		params.append(payload_dict["role"])
+	if "service" in payload_dict:
+		updates.append("service=%s")
+		params.append(payload_dict["service"])
+	if "on_shift" in payload_dict and payload_dict["on_shift"] is not None:
+		updates.append("on_shift=%s")
+		params.append(1 if payload_dict["on_shift"] else 0)
+	
+	if not updates:
+		raise HTTPException(status_code=400, detail="No fields to update")
+	
+	params.append(id)
+	sql = f"UPDATE staff_schedule SET {', '.join(updates)} WHERE id=%s"
+	count = execute(conn, sql, tuple(params))
+	return {"updated": count}
+
+
+@app.delete("/staff-schedule/{id}", response_model=dict, tags=["Staff Schedule"])
+def delete_staff_schedule(id: int, conn=Depends(db_conn)):
+	count = execute(conn, "DELETE FROM staff_schedule WHERE id=%s", (id,))
+	return {"deleted": count}
+
