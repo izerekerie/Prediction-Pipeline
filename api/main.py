@@ -483,3 +483,140 @@ def delete_staff_schedule(id: int, conn=Depends(db_conn)):
 	count = execute(conn, "DELETE FROM staff_schedule WHERE id=%s", (id,))
 	return {"deleted": count}
 
+
+# ======== Services Weekly CRUD ========
+@app.post("/services-weekly", response_model=ServiceWeeklyOut, status_code=status.HTTP_201_CREATED, tags=["Services Weekly"])
+def create_service_weekly(payload: ServiceWeeklyIn, conn=Depends(db_conn)):
+	execute(
+		conn,
+		"""
+		INSERT INTO services_weekly
+		(`week`,`month`,service,available_beds,patients_request,patients_admitted,patients_refused,
+		 patient_satisfaction,staff_morale,`event`)
+		VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+		""",
+		(
+			payload.week,
+			payload.month,
+			payload.service,
+			payload.available_beds,
+			payload.patients_request,
+			payload.patients_admitted,
+			payload.patients_refused,
+			payload.patient_satisfaction,
+			payload.staff_morale,
+			payload.event,
+		),
+	)
+	row = query_one(
+		conn,
+		"SELECT * FROM services_weekly WHERE `week`=%s AND `month`=%s AND service=%s",
+		(payload.week, payload.month, payload.service),
+	)
+	return row  # type: ignore
+
+
+@app.get("/services-weekly", response_model=list[ServiceWeeklyOut], tags=["Services Weekly"])
+def list_services_weekly(conn=Depends(db_conn)):
+	return query_all(conn, "SELECT * FROM services_weekly ORDER BY id DESC", ())
+
+
+@app.get("/services-weekly/{id}", response_model=ServiceWeeklyOut, tags=["Services Weekly"])
+def get_service_weekly(id: int, conn=Depends(db_conn)):
+	row = query_one(conn, "SELECT * FROM services_weekly WHERE id=%s", (id,))
+	if not row:
+		raise HTTPException(status_code=404, detail="Record not found")
+	return row  # type: ignore
+
+
+@app.put("/services-weekly/{id}", response_model=dict, tags=["Services Weekly"])
+def update_service_weekly(id: int, payload: ServiceWeeklyIn, conn=Depends(db_conn)):
+	count = execute(
+		conn,
+		"""
+		UPDATE services_weekly
+		SET `week`=%s, `month`=%s, service=%s, available_beds=%s, patients_request=%s,
+		    patients_admitted=%s, patients_refused=%s, patient_satisfaction=%s, staff_morale=%s, `event`=%s
+		WHERE id=%s
+		""",
+		(
+			payload.week,
+			payload.month,
+			payload.service,
+			payload.available_beds,
+			payload.patients_request,
+			payload.patients_admitted,
+			payload.patients_refused,
+			payload.patient_satisfaction,
+			payload.staff_morale,
+			payload.event,
+			id,
+		),
+	)
+	return {"updated": count}
+
+
+@app.patch("/services-weekly/{id}", response_model=dict, tags=["Services Weekly"])
+def patch_service_weekly(id: int, payload: ServiceWeeklyPatch, conn=Depends(db_conn)):
+	# Check if record exists
+	row = query_one(conn, "SELECT * FROM services_weekly WHERE id=%s", (id,))
+	if not row:
+		raise HTTPException(status_code=404, detail="Record not found")
+	
+	# Build dynamic UPDATE query with only provided fields
+	updates = []
+	params = []
+	
+	payload_dict = payload.model_dump(exclude_unset=True)  # Only get fields that were explicitly set
+	
+	if "week" in payload_dict and payload_dict["week"] is not None:
+		updates.append("`week`=%s")
+		params.append(payload_dict["week"])
+	if "month" in payload_dict and payload_dict["month"] is not None:
+		updates.append("`month`=%s")
+		params.append(payload_dict["month"])
+	if "service" in payload_dict and payload_dict["service"] is not None:
+		updates.append("service=%s")
+		params.append(payload_dict["service"])
+	if "available_beds" in payload_dict:
+		updates.append("available_beds=%s")
+		params.append(payload_dict["available_beds"])
+	if "patients_request" in payload_dict:
+		updates.append("patients_request=%s")
+		params.append(payload_dict["patients_request"])
+	if "patients_admitted" in payload_dict:
+		updates.append("patients_admitted=%s")
+		params.append(payload_dict["patients_admitted"])
+	if "patients_refused" in payload_dict:
+		updates.append("patients_refused=%s")
+		params.append(payload_dict["patients_refused"])
+	if "patient_satisfaction" in payload_dict:
+		updates.append("patient_satisfaction=%s")
+		params.append(payload_dict["patient_satisfaction"])
+	if "staff_morale" in payload_dict:
+		updates.append("staff_morale=%s")
+		params.append(payload_dict["staff_morale"])
+	if "event" in payload_dict:
+		updates.append("`event`=%s")
+		params.append(payload_dict["event"])
+	
+	if not updates:
+		raise HTTPException(status_code=400, detail="No fields to update")
+	
+	params.append(id)
+	sql = f"UPDATE services_weekly SET {', '.join(updates)} WHERE id=%s"
+	count = execute(conn, sql, tuple(params))
+	return {"updated": count}
+
+
+@app.delete("/services-weekly/{id}", response_model=dict, tags=["Services Weekly"])
+def delete_service_weekly(id: int, conn=Depends(db_conn)):
+	count = execute(conn, "DELETE FROM services_weekly WHERE id=%s", (id,))
+	return {"deleted": count}
+
+
+@app.get("/health", response_model=dict, tags=["Health"])
+def health(conn=Depends(db_conn)):
+	_ = query_one(conn, "SELECT 1 AS ok", ())
+	return {"status": "ok"}
+
