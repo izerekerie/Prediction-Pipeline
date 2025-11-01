@@ -221,19 +221,76 @@ sp_statements = [
     """,
 
 ]
+
+# Triggers to create
+trigger_statements = [
+    "DROP TRIGGER IF EXISTS trg_staff_update_log;",
+    """
+    CREATE TRIGGER trg_staff_update_log
+    AFTER UPDATE ON staff
+    FOR EACH ROW
+    BEGIN
+        DECLARE v_old_values LONGTEXT DEFAULT NULL;
+        DECLARE v_new_values LONGTEXT DEFAULT NULL;
+        
+        -- Build JSON-like string for old values
+        SET v_old_values = CONCAT(
+            '{',
+            '"staff_id":"', IFNULL(OLD.staff_id, ''), '",',
+            '"staff_name":"', IFNULL(OLD.staff_name, ''), '",',
+            '"role":"', IFNULL(OLD.role, ''), '",',
+            '"service":"', IFNULL(OLD.service, ''),
+            '"}'
+        );
+        
+        -- Build JSON-like string for new values
+        SET v_new_values = CONCAT(
+            '{',
+            '"staff_id":"', IFNULL(NEW.staff_id, ''), '",',
+            '"staff_name":"', IFNULL(NEW.staff_name, ''), '",',
+            '"role":"', IFNULL(NEW.role, ''), '",',
+            '"service":"', IFNULL(NEW.service, ''),
+            '"}'
+        );
+        
+        -- Log the change using stored procedure
+        CALL sp_log_change(
+            'staff',
+            NEW.staff_id,
+            'UPDATE',
+            v_old_values,
+            v_new_values,
+            USER()
+        );
+    END;
+    """,
+]
+
 # ...existing code...
 
 def run():
     try:
         with conn.cursor() as cur:
+            # Create tables
             for stmt in create_table_statements:
                 cur.execute(stmt)
 
+            # Create stored procedures
             for stmt in sp_statements:
                 cur.execute(stmt)
 
-        print("Tables ensured and stored procedures created. (JSON columns replaced with LONGTEXT for compatibility.)")
-        print("Use: CALL sp_insert_patient(..., user);")
+            # Create triggers
+            for stmt in trigger_statements:
+                cur.execute(stmt)
+
+        print("Tables, stored procedures, and triggers created successfully.")
+        print("Stored procedures:")
+        print("  - sp_log_change: Logs changes to audit_log")
+        print("  - sp_insert_patient: Validates and inserts patients")
+        print("  - sp_check_staff_availability: Checks staff availability")
+        print("  - sp_calculate_service_metrics: Calculates service metrics")
+        print("Triggers:")
+        print("  - trg_staff_update_log: Auto-logs staff table updates")
     finally:
         conn.close()
 
