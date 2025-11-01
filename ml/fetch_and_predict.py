@@ -1,75 +1,85 @@
-import requests
+from __future__ import annotations
+
+import sys, os
+from pathlib import Path
 import pandas as pd
 import joblib
 import pymysql
 
-# ---------- CONFIG ----------
-API_BASE = "http://127.0.0.1:8000"     
-MODEL_PATH = "model.joblib"            
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Database credentials
+from scripts.fetch_latest import fetch_latest as fetch_latest_record
+
+
+# ---------------------------
+# CONFIGURATION
+# ---------------------------
+API_BASE = "http://127.0.0.1:8000"
+RESOURCE = "services-weekly"
+
+# MySQL connection info
 HOST = "sql3.freesqldatabase.com"
+PORT = 3306
 DB_NAME = "sql3805058"
 DB_USER = "sql3805058"
 DB_PASS = "wBhIUnhTBQ"
-PORT = 3306
 
-# ---------- FETCH LATEST DATA ----------
-def fetch_latest():
-    """Fetch the latest record from the /services-weekly endpoint."""
-    url = f"{API_BASE}/services-weekly"
-    r = requests.get(url, timeout=15)
-    r.raise_for_status()
-    data = r.json()
-    # pick the last record (largest id)
-    latest = max(data, key=lambda d: d.get("id", 0))
-    print(" Latest record fetched from API.")
-    return latest
+# Locate the model file next to this script
+HERE = Path(__file__).resolve().parent
+MODEL_PATH = HERE / "model.joblib"
 
-# ---------- PREDICT ----------
-def predict_latest(latest):
-    """Use model.joblib to make a prediction on the latest record."""
+
+# ---------------------------
+# MAIN LOGIC
+# ---------------------------
+def main():
+    # 1️ Fetch the latest record using teammate's helper
+    latest = fetch_latest_record(API_BASE, RESOURCE)
+    if not latest:
+        raise RuntimeError(" No latest record from API. Make sure you seeded data.")
+
+    print(" Latest record fetched successfully.")
+
+    # 2️ Load your trained model
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(f"Model not found at {MODEL_PATH}. Run train_model.py first.")
     bundle = joblib.load(MODEL_PATH)
+
     pipe = bundle["pipeline"]
     features = bundle["features"]
+    target = bundle.get("target", "prediction")
 
-    # Build a one-row DataFrame matching model features
+    # 3️ Prepare and predict
     X = pd.DataFrame([{f: latest.get(f, None) for f in features}])
-    y_pred = pipe.predict(X)[0]
+    y_pred = float(pipe.predict(X)[0])
+    print(f" Predicted {target}: {y_pred}")
 
-    print(f"Prediction for record {latest.get('id')}: {y_pred}")
-    return y_pred
+    # 4️ Log prediction in SQL DB
+    source_id = latest.get("id")
+    if source_id is None:
+        print(" No 'id' in record; skipping DB log.")
+        return
 
-# ---------- LOG RESULT ----------
-def log_prediction(source_id, value):
-    """Insert prediction into MySQL 'predictions' table."""
     conn = pymysql.connect(
-        host=HOST, port=PORT, user=DB_USER,
-        password=DB_PASS, database=DB_NAME
+        host=HOST, port=PORT, user=DB_USER, password=DB_PASS, database=DB_NAME
     )
-    with conn.cursor() as cur:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS predictions(
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                source_table VARCHAR(50),
-                source_id INT,
-                prediction_value FLOAT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO predictions (source_table, source_id, prediction_value)
+                VALUES (%s, %s, %s)
+                """,
+                ("services_weekly", int(source_id), y_pred),
             )
-        """)
-        cur.execute("""
-            INSERT INTO predictions (source_table, source_id, prediction_value)
-            VALUES (%s, %s, %s)
-        """, ("services_weekly", source_id, float(value)))
-    conn.commit()
-    conn.close()
-    print(" Logged prediction in SQL table 'predictions'.")
+        conn.commit()
+        print(" Logged prediction in SQL table 'predictions'.")
+    finally:
+        conn.close()
 
-# ---------- MAIN ----------
-def main():
-    latest = fetch_latest()
-    pred = predict_latest(latest)
-    log_prediction(latest.get("id"), pred)
 
+# ---------------------------
+# RUN
+# ---------------------------
 if __name__ == "__main__":
     main()
