@@ -1,5 +1,13 @@
 # Prediction-Pipeline
 
+## Overview
+This project predicts weekly hospital patient admissions using data like
+available beds, patient requests, satisfaction, staff morale, and events.
+It combines a MySQL database, a FastAPI API, and a machine learning model 
+that fetches the latest data, makes a prediction, and saves the result back
+to the database for better hospital planning.
+
+
 ## Task 1 — MongoDB
 
 This folder contains a small MongoDB helper used for the assignment: schema
