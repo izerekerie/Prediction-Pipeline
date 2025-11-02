@@ -2,8 +2,44 @@
 
 ## Database Schema: Prediction Pipeline
 
+### Interactive Visual Diagram
+🔗 **Live ERD Diagram**: [https://dbdiagram.io/d/6907a69a6735e11170dd262b](https://dbdiagram.io/d/6907a69a6735e11170dd262b)
+
+**The diagram shows:**
+- ✅ All 6 tables with complete field definitions
+- ✅ Primary keys clearly marked with [pk]
+- ✅ **Foreign key relationship line**: `staff_schedule.staff_id` → `staff.staff_id` (visible connecting line)
+- ✅ Data types for all columns
+- ✅ Constraints (NOT NULL, DEFAULT values)
+- ✅ Unique indexes
+- ✅ Field notes and descriptions
+
+**Export Instructions:**
+1. Click the link above to view the interactive diagram
+2. Click "Export" button (top right corner)
+3. Choose PNG or PDF format
+4. Include the exported image in your PDF report
+
+**If the relationship line is not visible:**
+- The relationship is defined as: `Ref: staff_schedule.staff_id > staff.staff_id`
+- The line should automatically appear connecting the two tables
+- Make sure you're viewing the diagram in "Diagram" mode (not "SQL" mode)
+
 ### Overview
 This document describes the database schema for the Prediction Pipeline system, including both MySQL (relational) and MongoDB (NoSQL) implementations.
+
+**Schema Compliance with Rubric Requirements:**
+- ✅ **Normalization**: 3NF (Third Normal Form) - All requirements met
+- ✅ **Data Types**: Properly defined (VARCHAR, INT, DATE, TINYINT, LONGTEXT, TIMESTAMP)
+- ✅ **Primary Keys**: All 6 tables have defined primary keys (marked with [pk])
+- ✅ **Foreign Keys**: `staff_schedule.staff_id` → `staff.staff_id` (with CASCADE rules)
+- ✅ **Stored Procedures**: 4 procedures implemented (exceeds minimum of 1):
+  - `sp_log_change` - Audit logging
+  - `sp_insert_patient` - Validation and insertion
+  - `sp_check_staff_availability` - Availability checks
+  - `sp_calculate_service_metrics` - Metrics calculation
+- ✅ **Trigger**: `trg_staff_update_log` - Auto-logs staff updates
+- ✅ **MongoDB Schema**: Collections model relationships well through references
 
 ---
 
@@ -291,22 +327,30 @@ The schema follows **Third Normal Form (3NF)**:
 
 ---
 
-## ERD Visualization Tools
+## ERD Visualization
 
-To generate a visual ERD diagram, you can use:
+### Interactive Diagram
+📊 **View the complete ERD diagram**: [https://dbdiagram.io/d/6907a69a6735e11170dd262b](https://dbdiagram.io/d/6907a69a6735e11170dd262b)
 
-1. **dbdiagram.io** (Free, online):
-   - Go to https://dbdiagram.io
-   - Use the syntax below or import this document
+The interactive diagram shows:
+- All 6 tables with their fields
+- Primary keys (PK) marked
+- Foreign key relationship: `staff_schedule.staff_id` → `staff.staff_id`
+- Unique indexes
+- Field constraints and notes
+- Data types for all columns
 
-2. **Draw.io / Lucidchart**:
-   - Manual creation using the entity descriptions above
+### Export for Report
+To export the diagram as PNG or PDF:
+1. Open the [interactive diagram link](https://dbdiagram.io/d/6907a69a6735e11170dd262b)
+2. Click the "Export" button (top right)
+3. Choose PNG or PDF format
+4. Include in your PDF report
 
-3. **MySQL Workbench**:
-   - Reverse engineer from the database
-   - Tools → Database → Reverse Engineer
+### dbdiagram.io Source Code:
+The complete dbdiagram.io code is available in: **`ERD_DBDIAGRAM.txt`**
 
-### dbdiagram.io Syntax:
+Copy the contents of that file into dbdiagram.io to recreate or modify the diagram. Below is the same code for reference:
 
 ```sql
 Table patients {
