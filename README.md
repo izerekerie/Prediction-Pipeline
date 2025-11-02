@@ -8,7 +8,7 @@ that fetches the latest data, makes a prediction, and saves the result back
 to the database for better hospital planning.
 
 
-## Task 1 — MongoDB
+## MongoDB (Task 1)
 
 This folder contains a small MongoDB helper used for the assignment: schema
 definitions, a helper to connect to MongoDB, a script to create collections
@@ -253,3 +253,31 @@ See `ERD_DIAGRAM.md` for the complete Entity Relationship Diagram documentation,
 - Triggers documentation
 - MongoDB schema structure
 - dbdiagram.io syntax for visual generation
+
+## Prediction Pipeline (Machine Learning) (Task 3)
+
+This task connects the trained machine learning model with the API and database to predict how many patients are likely to be admitted each week.
+
+### How it Works
+
+1. **Model Training**
+   - The file `ml/train_model.py` trains a `RandomForestRegressor` using the hospital dataset (`services_weekly.csv`).
+   - Features: `week`, `month`, `service`, `available_beds`, `patients_request`, `patients_refused`, `patient_satisfaction`, `staff_morale`, and `event`.
+   - Target variable: `patients_admitted`.
+   - The trained model is saved as `model.joblib` in the `ml/` folder.
+
+2. **Fetching Latest Data**
+   - The script `scripts/fetch_latest.py` gets the most recent record from the FastAPI endpoint `/services-weekly`.
+   - It verifies connectivity and returns the latest record as a JSON object.
+
+3. **Prediction and Logging**
+   - The file `ml/fetch_and_predict.py` loads the saved model, fetches the latest data from the API, makes a prediction, and logs the predicted value into the MySQL `predictions` table.
+   - The logged entry includes: `source_table`, `source_id`, `prediction_value`, and a timestamp.
+
+4. **Verification**
+   - Use `ml/check_predictions.py` to view recent prediction logs:
+     ```bash
+     python -m ml.check_predictions
+     ```
+   - This displays the latest records from the `predictions` table.
+
